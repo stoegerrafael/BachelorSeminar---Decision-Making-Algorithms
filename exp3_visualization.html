@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Exp3 — Interactive Visualization</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Georgia', serif; background: #f8f7f4; color: #1a1a1a; min-height: 100vh; padding: 2rem; }
@@ -49,7 +50,10 @@
 
 <div id="panel-tradeoff" class="panel active">
   <div class="info-box">
-    Theorem 3.1 bounds the regret by two competing terms: <strong>(e−1)γ G<sub>max</sub></strong> (exploration cost, grows with γ) and <strong>K ln K / γ</strong> (uncertainty cost, shrinks with γ). The optimal γ* minimizes their sum.
+    Theorem 3.1 bounds the regret by two competing terms:
+    <span style="color:#c0392b; font-weight:600;">(e&#x2212;1)&#xB7;&#x3B3;&#xB7;G<sub>max</sub></span> (exploration cost — grows with &#x3B3;) and
+    <span style="color:#185fa5; font-weight:600;">(K&#xB7;ln K) / &#x3B3;</span> (uncertainty cost — shrinks with &#x3B3;).
+    The optimal &#x3B3;* minimizes their sum — marked by the green dot below.
   </div>
   <div class="controls">
     <div class="slider-row">
@@ -63,14 +67,15 @@
       <span class="slider-val" id="Gmax-out">100</span>
     </div>
   </div>
+  <div id="insight-box" class="info-box" style="border-left: 3px solid #1a6b2e; background: #f4faf5;"></div>
   <div class="chart-wrap">
     <canvas id="tradeoffChart" role="img" aria-label="U-shaped trade-off curve showing exploration cost, uncertainty cost, and their sum with optimal gamma marked.">Trade-off between exploration and uncertainty costs as gamma varies from 0 to 1.</canvas>
   </div>
   <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> cost of exploration &nbsp;(e−1)γ G<sub>max</sub></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#185fa5;"></div> cost of uncertainty &nbsp;K ln K / γ</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> (e&#x2212;1)&#xB7;&#x3B3;&#xB7;G<sub>max</sub> &mdash; exploration cost</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#185fa5;"></div> (K&#xB7;ln K) / &#x3B3; &mdash; uncertainty cost</div>
     <div class="legend-item"><div class="legend-dot" style="background:#1a6b2e;"></div> total bound (sum)</div>
-    <div class="legend-item"><div class="legend-dot dashed"></div> optimal γ*</div>
+    <div class="legend-item"><span style="width:12px;height:12px;border-radius:50%;background:#1a6b2e;display:inline-block;"></span>&nbsp; optimal &#x3B3;* (minimum)</div>
   </div>
   <div id="gamma-star-label" class="info-box"></div>
 </div>
@@ -154,16 +159,29 @@ function updateTradeoff() {
   document.getElementById('gamma-star-label').innerHTML =
     `<strong>Optimal γ* = ${gStar.toFixed(3)}</strong> &nbsp;→&nbsp; minimum bound ≈ <strong>${minBound.toFixed(1)}</strong>`;
 
-  const gStarLabel = +gStar.toFixed(2);
+  document.getElementById('insight-box').innerHTML = `
+    <strong>How the parameters shift γ*:</strong><br>
+    <span style="color:#c0392b;">K increases</span> → uncertainty cost (K·ln K)/γ grows → γ* shifts <strong>right</strong> (more exploration needed to cover more arms).<br>
+    <span style="color:#c0392b;">K decreases</span> → uncertainty cost shrinks → γ* shifts <strong>left</strong> (fewer arms, less exploration needed).<br>
+    <span style="color:#185fa5;">G<sub>max</sub> increases</span> → exploration cost (e−1)·γ·G<sub>max</sub> grows → γ* shifts <strong>left</strong> (long game, exploit more).<br>
+    <span style="color:#185fa5;">G<sub>max</sub> decreases</span> → exploration cost shrinks → γ* shifts <strong>right</strong> (short game, keep exploring).
+  `;
+
+  const minPointData = gammas.map((g, i) => i === gStarIdx ? minBound : null);
+  const ptRadii = gammas.map((_, i) => i === gStarIdx ? 9 : 0);
+  const ptHover = gammas.map((_, i) => i === gStarIdx ? 12 : 0);
 
   if(tradeoffChart) {
     tradeoffChart.data.labels = gammas;
     tradeoffChart.data.datasets[0].data = expl;
     tradeoffChart.data.datasets[1].data = uncert;
     tradeoffChart.data.datasets[2].data = total;
-    tradeoffChart.options.plugins.annotation.annotations.vline.xMin = gStarLabel;
-    tradeoffChart.options.plugins.annotation.annotations.vline.xMax = gStarLabel;
-    tradeoffChart.options.plugins.annotation.annotations.vline.label.content = 'γ* = ' + gStar.toFixed(3);
+    tradeoffChart.data.datasets[3].data = minPointData;
+    tradeoffChart.data.datasets[3].pointRadius = ptRadii;
+    tradeoffChart.data.datasets[3].pointHoverRadius = ptHover;
+    tradeoffChart.options.plugins.annotation.annotations.ptLabel.xValue = gammas[gStarIdx];
+    tradeoffChart.options.plugins.annotation.annotations.ptLabel.yValue = minBound;
+    tradeoffChart.options.plugins.annotation.annotations.ptLabel.content = ['γ* = ' + gStar.toFixed(3), 'min = ' + minBound.toFixed(1)];
     tradeoffChart.update();
   } else {
     tradeoffChart = new Chart(document.getElementById('tradeoffChart'), {
@@ -174,19 +192,45 @@ function updateTradeoff() {
           { label: 'exploration cost', data: expl, borderColor: '#c0392b', borderWidth: 2, pointRadius: 0, tension: 0.3 },
           { label: 'uncertainty cost', data: uncert, borderColor: '#185fa5', borderWidth: 2, pointRadius: 0, tension: 0.3 },
           { label: 'total bound', data: total, borderColor: '#1a6b2e', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+          {
+            label: 'optimal minimum',
+            data: minPointData,
+            borderColor: '#1a6b2e',
+            backgroundColor: '#1a6b2e',
+            pointRadius: ptRadii,
+            pointHoverRadius: ptHover,
+            pointStyle: 'circle',
+            showLine: false
+          }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.datasetIndex === 3 ? 'min bound = ' + ctx.parsed.y.toFixed(1) : null,
+              title: ctx => ctx[0]?.datasetIndex === 3 ? 'Optimal γ* = ' + ctx[0].label : ''
+            },
+            filter: item => item.datasetIndex === 3
+          },
           annotation: {
             annotations: {
-              vline: {
-                type: 'line',
-                xMin: gStarLabel, xMax: gStarLabel,
-                borderColor: '#888', borderWidth: 1.5, borderDash: [5,3],
-                label: { display: true, content: 'γ* = ' + gStar.toFixed(3), position: 'start', font: { size: 11 }, color: '#555', backgroundColor: 'rgba(255,255,255,0.8)' }
+              ptLabel: {
+                type: 'label',
+                xValue: gammas[gStarIdx],
+                yValue: minBound,
+                xAdjust: 60,
+                yAdjust: -20,
+                content: ['γ* = ' + gStar.toFixed(3), 'min = ' + minBound.toFixed(1)],
+                font: { size: 11, weight: '600' },
+                color: '#1a6b2e',
+                backgroundColor: 'rgba(255,255,255,0.92)',
+                padding: { top: 4, bottom: 4, left: 8, right: 8 },
+                borderRadius: 4,
+                borderColor: '#1a6b2e',
+                borderWidth: 1
               }
             }
           }
