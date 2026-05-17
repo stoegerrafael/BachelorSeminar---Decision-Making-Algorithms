@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exp3 — Interactive Visualization</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; background: #f8f7f4; color: #1a1a1a; min-height: 100vh; padding: 2rem; }
+  h1 { font-size: 1.4rem; font-weight: 400; color: #1a1a1a; margin-bottom: 0.25rem; letter-spacing: -0.01em; }
+  .subtitle { font-size: 0.85rem; color: #666; margin-bottom: 2rem; font-style: italic; }
+  .tabs { display: flex; gap: 0; margin-bottom: 2rem; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+  .tab-btn { background: #fff; border: none; padding: 10px 24px; cursor: pointer; font-size: 0.9rem; color: #666; font-family: inherit; transition: all 0.15s; }
+  .tab-btn:hover { background: #f0ede8; color: #1a1a1a; }
+  .tab-btn.active { background: #1a1a1a; color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 1.5rem; max-width: 500px; }
+  .slider-row { display: flex; align-items: center; gap: 16px; }
+  .slider-label { font-size: 0.85rem; color: #555; min-width: 120px; }
+  input[type=range] { flex: 1; accent-color: #1a1a1a; height: 4px; }
+  .slider-val { font-size: 0.9rem; font-weight: 600; min-width: 50px; color: #1a1a1a; }
+  .chart-wrap { position: relative; width: 100%; height: 340px; background: #fff; border: 1px solid #e8e5e0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.8rem; color: #555; margin-bottom: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 24px; height: 3px; border-radius: 2px; }
+  .legend-dot.dashed { background: repeating-linear-gradient(90deg, #888 0, #888 4px, transparent 4px, transparent 8px); height: 2px; }
+  .info-box { background: #fff; border: 1px solid #e8e5e0; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.85rem; color: #444; margin-bottom: 1.5rem; }
+  .info-box strong { color: #1a1a1a; }
+  .gamma-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; align-items: center; }
+  .gamma-btns span { font-size: 0.85rem; color: #555; }
+  .gamma-btn { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 0.82rem; color: #555; font-family: inherit; transition: all 0.15s; }
+  .gamma-btn:hover { border-color: #999; color: #1a1a1a; }
+  .gamma-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .tum-badge { display: inline-block; background: #0065bd; color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; margin-bottom: 1rem; letter-spacing: 0.05em; font-family: sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="tum-badge">TUM · Bachelor Seminar · Decision Sciences &amp; Systems</div>
+<h1>Exp3 — Interactive Visualization</h1>
+<p class="subtitle">The non-stochastic multi-armed bandit problem · Auer, Cesa-Bianchi, Freund, Schapire (2002)</p>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('tradeoff', this)">Plot 1 — γ trade-off curve</button>
+  <button class="tab-btn" onclick="switchTab('simulator', this)">Plot 2 — regret simulator</button>
+</div>
+
+<div id="panel-tradeoff" class="panel active">
+  <div class="info-box">
+    Theorem 3.1 bounds the regret by two competing terms: <strong>(e−1)γ G<sub>max</sub></strong> (exploration cost, grows with γ) and <strong>K ln K / γ</strong> (uncertainty cost, shrinks with γ). The optimal γ* minimizes their sum.
+  </div>
+  <div class="controls">
+    <div class="slider-row">
+      <span class="slider-label">K (number of arms)</span>
+      <input type="range" min="2" max="20" value="5" step="1" id="K1" oninput="updateTradeoff()">
+      <span class="slider-val" id="K1-out">5</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">G<sub>max</sub> (best arm total)</span>
+      <input type="range" min="10" max="300" value="100" step="1" id="Gmax" oninput="updateTradeoff()">
+      <span class="slider-val" id="Gmax-out">100</span>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="tradeoffChart" role="img" aria-label="U-shaped trade-off curve showing exploration cost, uncertainty cost, and their sum with optimal gamma marked.">Trade-off between exploration and uncertainty costs as gamma varies from 0 to 1.</canvas>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> cost of exploration &nbsp;(e−1)γ G<sub>max</sub></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#185fa5;"></div> cost of uncertainty &nbsp;K ln K / γ</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a6b2e;"></div> total bound (sum)</div>
+    <div class="legend-item"><div class="legend-dot dashed"></div> optimal γ*</div>
+  </div>
+  <div id="gamma-star-label" class="info-box"></div>
+</div>
+
+<div id="panel-simulator" class="panel">
+  <div class="info-box">
+    Watch how the cumulative regret evolves over T rounds for different values of γ. The optimal γ* (from Corollary 3.2) consistently achieves the lowest regret.
+  </div>
+  <div class="controls">
+    <div class="slider-row">
+      <span class="slider-label">K (number of arms)</span>
+      <input type="range" min="2" max="10" value="4" step="1" id="K2" oninput="runSim()">
+      <span class="slider-val" id="K2-out">4</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">T (rounds)</span>
+      <input type="range" min="100" max="2000" value="600" step="100" id="T2" oninput="runSim()">
+      <span class="slider-val" id="T2-out">600</span>
+    </div>
+  </div>
+  <div class="gamma-btns">
+    <span>Compare γ:</span>
+    <button class="gamma-btn active" id="btn-opt" onclick="setGammaMode('opt',this)">optimal γ*</button>
+    <button class="gamma-btn" id="btn-low" onclick="setGammaMode('low',this)">too small (γ=0.01)</button>
+    <button class="gamma-btn" id="btn-high" onclick="setGammaMode('high',this)">too large (γ=0.9)</button>
+    <button class="gamma-btn" id="btn-all" onclick="setGammaMode('all',this)">all three</button>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="simChart" role="img" aria-label="Line chart showing cumulative regret over time for different gamma values.">Cumulative regret over T rounds for optimal, too-small, and too-large gamma.</canvas>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#1a6b2e;"></div> optimal γ*</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#185fa5; border-top: 2px dashed #185fa5; background:none; width:24px;"></div> γ=0.01 (too small)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> γ=0.9 (too large)</div>
+  </div>
+  <div id="sim-info" class="info-box"></div>
+</div>
+
+<script>
+let tradeoffChart = null;
+let simChart = null;
+let gammaMode = 'opt';
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-tradeoff').classList.toggle('active', tab === 'tradeoff');
+  document.getElementById('panel-simulator').classList.toggle('active', tab === 'simulator');
+  if(tab === 'tradeoff') updateTradeoff();
+  else runSim();
+}
+
+function setGammaMode(mode, btn) {
+  gammaMode = mode;
+  document.querySelectorAll('.gamma-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  runSim();
+}
+
+function updateTradeoff() {
+  const K = +document.getElementById('K1').value;
+  const Gmax = +document.getElementById('Gmax').value;
+  document.getElementById('K1-out').textContent = K;
+  document.getElementById('Gmax-out').textContent = Gmax;
+
+  const gammas = [], expl = [], uncert = [], total = [];
+  for(let i = 1; i <= 100; i++) {
+    const g = i / 100;
+    gammas.push(+g.toFixed(2));
+    const e1 = (Math.E - 1) * g * Gmax;
+    const e2 = K * Math.log(K) / g;
+    expl.push(+e1.toFixed(2));
+    uncert.push(+e2.toFixed(2));
+    total.push(+(e1 + e2).toFixed(2));
+  }
+
+  const gStar = Math.min(1, Math.sqrt(K * Math.log(K) / ((Math.E - 1) * Gmax)));
+  const gStarIdx = Math.min(Math.round(gStar * 100) - 1, 99);
+  const minBound = total[gStarIdx];
+
+  document.getElementById('gamma-star-label').innerHTML =
+    `<strong>Optimal γ* = ${gStar.toFixed(3)}</strong> &nbsp;→&nbsp; minimum bound ≈ <strong>${minBound.toFixed(1)}</strong>`;
+
+  const gStarLabel = +gStar.toFixed(2);
+
+  if(tradeoffChart) {
+    tradeoffChart.data.labels = gammas;
+    tradeoffChart.data.datasets[0].data = expl;
+    tradeoffChart.data.datasets[1].data = uncert;
+    tradeoffChart.data.datasets[2].data = total;
+    tradeoffChart.options.plugins.annotation.annotations.vline.xMin = gStarLabel;
+    tradeoffChart.options.plugins.annotation.annotations.vline.xMax = gStarLabel;
+    tradeoffChart.options.plugins.annotation.annotations.vline.label.content = 'γ* = ' + gStar.toFixed(3);
+    tradeoffChart.update();
+  } else {
+    tradeoffChart = new Chart(document.getElementById('tradeoffChart'), {
+      type: 'line',
+      data: {
+        labels: gammas,
+        datasets: [
+          { label: 'exploration cost', data: expl, borderColor: '#c0392b', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+          { label: 'uncertainty cost', data: uncert, borderColor: '#185fa5', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+          { label: 'total bound', data: total, borderColor: '#1a6b2e', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          annotation: {
+            annotations: {
+              vline: {
+                type: 'line',
+                xMin: gStarLabel, xMax: gStarLabel,
+                borderColor: '#888', borderWidth: 1.5, borderDash: [5,3],
+                label: { display: true, content: 'γ* = ' + gStar.toFixed(3), position: 'start', font: { size: 11 }, color: '#555', backgroundColor: 'rgba(255,255,255,0.8)' }
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'γ', font: { size: 13 } }, ticks: { maxTicksLimit: 11, callback: (v, i) => i % 10 === 0 ? (i/100).toFixed(1) : '' } },
+          y: { title: { display: true, text: 'bound size', font: { size: 13 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  const maxY = Math.max(...total.slice(0, 25));
+  tradeoffChart.options.scales.y.max = Math.round(maxY * 1.1);
+  tradeoffChart.update();
+}
+
+function simulateExp3(K, T, gamma) {
+  const rewards = [];
+  const bestArm = Math.floor(Math.random() * K);
+  for(let k = 0; k < K; k++) {
+    const row = [];
+    for(let t = 0; t < T; t++) {
+      row.push(k === bestArm ? 0.65 + Math.random() * 0.35 : Math.random() * 0.35);
+    }
+    rewards.push(row);
+  }
+
+  const w = new Array(K).fill(1);
+  let Gtotal = 0;
+  const regrets = [];
+
+  for(let t = 0; t < T; t++) {
+    const W = w.reduce((a,b) => a+b, 0);
+    const p = w.map(wi => (1 - gamma) * wi / W + gamma / K);
+    let r = Math.random(), cum = 0, chosen = 0;
+    for(let k = 0; k < K; k++) { cum += p[k]; if(r < cum) { chosen = k; break; } }
+    const reward = rewards[chosen][t];
+    Gtotal += reward;
+    const xhat = new Array(K).fill(0);
+    xhat[chosen] = reward / p[chosen];
+    for(let k = 0; k < K; k++) w[k] *= Math.exp(gamma * xhat[k] / K);
+    const bestSoFar = Math.max(...rewards.map(r => r.slice(0, t+1).reduce((a,b)=>a+b,0)));
+    regrets.push(+(bestSoFar - Gtotal).toFixed(2));
+  }
+  return regrets;
+}
+
+function runSim() {
+  const K = +document.getElementById('K2').value;
+  const T = +document.getElementById('T2').value;
+  document.getElementById('K2-out').textContent = K;
+  document.getElementById('T2-out').textContent = T;
+
+  const gStar = Math.min(1, Math.sqrt(K * Math.log(K) / ((Math.E - 1) * T)));
+  const labels = Array.from({length: T}, (_, i) => i + 1);
+  const datasets = [];
+
+  const showOpt  = gammaMode === 'opt'  || gammaMode === 'all';
+  const showLow  = gammaMode === 'low'  || gammaMode === 'all';
+  const showHigh = gammaMode === 'high' || gammaMode === 'all';
+
+  if(showOpt)  datasets.push({ label: `optimal γ*=${gStar.toFixed(3)}`, data: simulateExp3(K, T, gStar),  borderColor: '#1a6b2e', borderWidth: 2, pointRadius: 0, tension: 0.2 });
+  if(showLow)  datasets.push({ label: 'γ=0.01 (too small)',             data: simulateExp3(K, T, 0.01),   borderColor: '#185fa5', borderWidth: 2, pointRadius: 0, tension: 0.2, borderDash: [5,3] });
+  if(showHigh) datasets.push({ label: 'γ=0.9 (too large)',              data: simulateExp3(K, T, 0.9),    borderColor: '#c0392b', borderWidth: 2, pointRadius: 0, tension: 0.2 });
+
+  document.getElementById('sim-info').innerHTML =
+    `K = ${K} arms &nbsp;·&nbsp; T = ${T} rounds &nbsp;·&nbsp; <strong>optimal γ* = ${gStar.toFixed(4)}</strong>`;
+
+  if(simChart) {
+    simChart.data.labels = labels;
+    simChart.data.datasets = datasets;
+    simChart.update();
+  } else {
+    simChart = new Chart(document.getElementById('simChart'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { title: { display: true, text: 'round t', font: { size: 13 } }, ticks: { maxTicksLimit: 8 } },
+          y: { title: { display: true, text: 'cumulative regret', font: { size: 13 } }, beginAtZero: true }
+        },
+        animation: { duration: 200 }
+      }
+    });
+  }
+}
+
+updateTradeoff();
+runSim();
+</script>
+</body>
+</html>
