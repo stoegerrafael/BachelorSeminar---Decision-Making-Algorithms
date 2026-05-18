@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exp3.P — Variance Visualization</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; background: #f8f7f4; color: #1a1a1a; min-height: 100vh; padding: 1.5rem 2rem; }
+  h1 { font-size: 1.4rem; font-weight: 400; margin-bottom: 0.2rem; }
+  .subtitle { font-size: 0.82rem; color: #666; margin-bottom: 1.5rem; font-style: italic; }
+  .tum-badge { display: inline-block; background: #0065bd; color: #fff; font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; margin-bottom: 0.75rem; letter-spacing: 0.05em; font-family: sans-serif; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+  .tab-btn { background: #fff; border: none; padding: 9px 22px; cursor: pointer; font-size: 0.88rem; color: #666; font-family: inherit; transition: all 0.15s; }
+  .tab-btn:hover { background: #f0ede8; color: #1a1a1a; }
+  .tab-btn.active { background: #1a1a1a; color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .card { background: #fff; border: 1px solid #e8e5e0; border-radius: 8px; padding: 1rem 1.25rem; }
+  .card-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem; color: #1a1a1a; }
+  .card-sub { font-size: 0.78rem; color: #666; margin-bottom: 1rem; line-height: 1.5; }
+  .chart-wrap { position: relative; width: 100%; height: 260px; }
+
+  .controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem; }
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider-label { font-size: 0.8rem; color: #555; min-width: 110px; }
+  input[type=range] { flex: 1; accent-color: #1a1a1a; }
+  .slider-val { font-size: 0.85rem; font-weight: 600; min-width: 35px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: #555; margin-top: 0.75rem; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 20px; height: 3px; border-radius: 2px; }
+
+  .info-box { background: #fff; border: 1px solid #e8e5e0; border-radius: 8px; padding: 0.875rem 1.1rem; font-size: 0.82rem; color: #444; margin-bottom: 1rem; line-height: 1.6; }
+  .info-box.green { border-left: 3px solid #1a6b2e; background: #f4faf5; }
+  .info-box.red { border-left: 3px solid #c0392b; background: #fdf5f4; }
+  .info-box strong { color: #1a1a1a; }
+
+  .variance-bar-wrap { margin-top: 1rem; }
+  .bar-label { font-size: 0.78rem; color: #555; margin-bottom: 4px; }
+  .bar-track { background: #eee; border-radius: 4px; height: 22px; position: relative; overflow: hidden; margin-bottom: 10px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; display: flex; align-items: center; padding-left: 8px; font-size: 0.72rem; color: #fff; font-weight: 600; white-space: nowrap; }
+
+  .run-btn { background: #1a1a1a; color: #fff; border: none; border-radius: 6px; padding: 8px 20px; cursor: pointer; font-size: 0.85rem; font-family: inherit; margin-bottom: 1rem; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.8; }
+  .gamma-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; align-items: center; }
+  .gamma-btns span { font-size: 0.8rem; color: #555; }
+  .gamma-btn { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 5px 13px; cursor: pointer; font-size: 0.78rem; color: #555; font-family: inherit; transition: all 0.15s; }
+  .gamma-btn:hover { border-color: #999; }
+  .gamma-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+  .stat-row { display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; }
+  .stat-box { background: #f8f7f4; border: 1px solid #e8e5e0; border-radius: 6px; padding: 0.5rem 0.875rem; font-size: 0.78rem; flex: 1; min-width: 120px; }
+  .stat-box .val { font-size: 1.1rem; font-weight: 600; margin-top: 2px; }
+  .stat-box.exp3 .val { color: #c0392b; }
+  .stat-box.exp3p .val { color: #1a6b2e; }
+</style>
+</head>
+<body>
+
+<div class="tum-badge">TUM · Bachelor Seminar · Decision Sciences &amp; Systems</div>
+<h1>Exp3.P — Variance &amp; High-Probability Bounds</h1>
+<p class="subtitle">The non-stochastic multi-armed bandit problem · Auer, Cesa-Bianchi, Freund, Schapire (2002)</p>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('variance', this)">Plot 1 — The Variance Problem</button>
+  <button class="tab-btn" onclick="switchTab('comparison', this)">Plot 2 — Exp3 vs Exp3.P</button>
+  <button class="tab-btn" onclick="switchTab('probability', this)">Plot 3 — High-Probability Bound</button>
+</div>
+
+<!-- PANEL 1: VARIANCE PROBLEM -->
+<div id="panel-variance" class="panel active">
+  <div class="info-box red">
+    <strong>The problem with Exp3:</strong> Importance weighting gives each arm an unbiased reward estimate — but at the cost of high variance. When arm <em>j</em> is rarely played, p<sub>j</sub>(t) is small, so x̂<sub>j</sub>(t) = x<sub>j</sub>(t)/p<sub>j</sub>(t) can be enormous. Summing over T rounds, the variance of G<sub>Exp3</sub> grows as T<sup>3/2</sup> — meaning a single run can have regret as large as T<sup>3/4</sup>.
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Importance weight magnitude vs. p<sub>j</sub>(t)</div>
+      <div class="card-sub">Move the slider to see how the importance weight x̂<sub>j</sub> = x<sub>j</sub>/p<sub>j</sub> explodes as p<sub>j</sub> shrinks — a rarely played arm gets a huge correction factor.</div>
+      <div class="controls">
+        <div class="slider-row">
+          <span class="slider-label">p<sub>j</sub>(t) — play prob.</span>
+          <input type="range" min="1" max="100" value="50" id="pj-slider" oninput="updateVarianceDemo()">
+          <span class="slider-val" id="pj-out">0.50</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">x<sub>j</sub>(t) — true reward</span>
+          <input type="range" min="1" max="100" value="60" id="xj-slider" oninput="updateVarianceDemo()">
+          <span class="slider-val" id="xj-out">0.60</span>
+        </div>
+      </div>
+      <div class="variance-bar-wrap">
+        <div class="bar-label">True reward x<sub>j</sub>(t)</div>
+        <div class="bar-track"><div class="bar-fill" id="bar-xj" style="background:#185fa5; width:60%">0.60</div></div>
+        <div class="bar-label">Importance-weighted estimate x̂<sub>j</sub>(t) = x<sub>j</sub>/p<sub>j</sub></div>
+        <div class="bar-track"><div class="bar-fill" id="bar-xhat" style="background:#c0392b; width:60%">1.20</div></div>
+        <div class="bar-label">Variance of x̂<sub>j</sub>(t) ≈ 1/p<sub>j</sub>(t)</div>
+        <div class="bar-track"><div class="bar-fill" id="bar-var" style="background:#8e44ad; width:20%">2.00</div></div>
+      </div>
+      <div id="variance-insight" class="info-box" style="margin-top:0.75rem; margin-bottom:0;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Cumulative variance over T rounds</div>
+      <div class="card-sub">As T grows, the variance of G<sub>Exp3</sub> grows as T<sup>3/2</sup> — meaning in a single run the regret can be as large as T<sup>3/4</sup>, far worse than the expected √T.</div>
+      <div class="controls">
+        <div class="slider-row">
+          <span class="slider-label">T (rounds)</span>
+          <input type="range" min="50" max="1000" value="300" step="50" id="T-var" oninput="updateVariancePlot()">
+          <span class="slider-val" id="T-var-out">300</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="varianceChart"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> T<sup>3/2</sup> — variance of G<sub>Exp3</sub></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1a6b2e;"></div> √T — expected regret</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#185fa5; border-top:2px dashed #185fa5; background:none;"></div> T<sup>3/4</sup> — worst-case single run</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 2: EXP3 vs EXP3.P -->
+<div id="panel-comparison" class="panel">
+  <div class="info-box green">
+    <strong>The fix:</strong> Exp3.P adds an uncertainty term σ̂<sub>i</sub>(t) to the weight update. This term grows faster when p<sub>i</sub>(t) is small — preventing any arm from becoming so unlikely that its importance weight explodes. Run the simulation to see the difference in a single realization.
+  </div>
+  <div class="controls" style="max-width:500px;">
+    <div class="slider-row">
+      <span class="slider-label">K (arms)</span>
+      <input type="range" min="2" max="10" value="4" step="1" id="K-comp" oninput="runComparison()">
+      <span class="slider-val" id="K-comp-out">4</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">T (rounds)</span>
+      <input type="range" min="100" max="2000" value="500" step="100" id="T-comp" oninput="runComparison()">
+      <span class="slider-val" id="T-comp-out">500</span>
+    </div>
+  </div>
+  <div class="gamma-btns">
+    <span>Show:</span>
+    <button class="gamma-btn active" id="btn-both" onclick="setCompMode('both',this)">Exp3 + Exp3.P</button>
+    <button class="gamma-btn" id="btn-exp3only" onclick="setCompMode('exp3only',this)">Exp3 only (multiple runs)</button>
+    <button class="gamma-btn" id="btn-exp3ponly" onclick="setCompMode('exp3ponly',this)">Exp3.P only (multiple runs)</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Cumulative regret: Exp3 vs Exp3.P — single realization</div>
+    <div class="card-sub">Exp3 can spike far above its expected bound in a single run. Exp3.P stays consistently close to the bound with high probability.</div>
+    <div class="chart-wrap" style="height:300px;">
+      <canvas id="compChart"></canvas>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> Exp3 single runs</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1a6b2e;"></div> Exp3.P single runs</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#888; border-top:2px dashed #888; background:none;"></div> O(√T) expected bound</div>
+    </div>
+    <div class="stat-row" id="comp-stats"></div>
+  </div>
+</div>
+
+<!-- PANEL 3: HIGH PROBABILITY BOUND -->
+<div id="panel-probability" class="panel">
+  <div class="info-box green">
+    <strong>Theorem 6.3:</strong> With parameters γ = min{3/5, 2√(3K ln K / (5T))} and α = 2√(ln(KT/δ)), Exp3.P achieves with probability at least 1−δ:
+    <br><br>
+    G<sub>max</sub> − G<sub>Exp3.P</sub> ≤ 4√(KT ln(KT/δ)) + 4√(5KT ln K/3) + 8 ln(KT/δ)
+    <br><br>
+    This holds for <em>any</em> assignment of rewards — not just on average.
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">What does "with probability 1−δ" mean?</div>
+      <div class="card-sub">Run N independent executions of Exp3 and Exp3.P. Count how many exceed the bound. With δ = 0.05, at most 5% of Exp3.P runs should exceed the bound.</div>
+      <div class="controls">
+        <div class="slider-row">
+          <span class="slider-label">K (arms)</span>
+          <input type="range" min="2" max="8" value="3" step="1" id="K-prob" oninput="runProbDemo()">
+          <span class="slider-val" id="K-prob-out">3</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">T (rounds)</span>
+          <input type="range" min="100" max="1000" value="400" step="100" id="T-prob" oninput="runProbDemo()">
+          <span class="slider-val" id="T-prob-out">400</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">δ (failure prob.)</span>
+          <input type="range" min="1" max="30" value="5" step="1" id="delta-prob" oninput="runProbDemo()">
+          <span class="slider-val" id="delta-prob-out">0.05</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">N (runs)</span>
+          <input type="range" min="20" max="200" value="50" step="10" id="N-prob" oninput="runProbDemo()">
+          <span class="slider-val" id="N-prob-out">50</span>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="probChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Bound violation rate</div>
+      <div class="card-sub">How often does the final regret exceed the theoretical bound? Exp3.P should stay below δ almost always. Exp3 violates far more often.</div>
+      <div id="prob-bars" class="variance-bar-wrap"></div>
+      <div id="prob-insight" class="info-box" style="margin-top:0.75rem; margin-bottom:0;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── GLOBALS ────────────────────────────────────────────────────────────────
+let varianceChart = null, compChart = null, probChart = null;
+let compMode = 'both';
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['variance','comparison','probability'].forEach(t =>
+    document.getElementById('panel-'+t).classList.toggle('active', t === tab));
+  if(tab==='variance') { updateVarianceDemo(); updateVariancePlot(); }
+  else if(tab==='comparison') runComparison();
+  else runProbDemo();
+}
+
+function setCompMode(mode, btn) {
+  compMode = mode;
+  document.querySelectorAll('.gamma-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  runComparison();
+}
+
+// ─── PANEL 1: VARIANCE DEMO ─────────────────────────────────────────────────
+function updateVarianceDemo() {
+  const pj = document.getElementById('pj-slider').value / 100;
+  const xj = document.getElementById('xj-slider').value / 100;
+  document.getElementById('pj-out').textContent = pj.toFixed(2);
+  document.getElementById('xj-out').textContent = xj.toFixed(2);
+
+  const xhat = xj / pj;
+  const variance = 1 / pj;
+
+  const xjPct = Math.min(xj * 100, 100);
+  const xhatPct = Math.min((xhat / 20) * 100, 100);
+  const varPct = Math.min((variance / 100) * 100, 100);
+
+  document.getElementById('bar-xj').style.width = xjPct + '%';
+  document.getElementById('bar-xj').textContent = xj.toFixed(2);
+  document.getElementById('bar-xhat').style.width = xhatPct + '%';
+  document.getElementById('bar-xhat').textContent = xhat.toFixed(2) + (xhat > 20 ? ' (!!!)' : '');
+  document.getElementById('bar-var').style.width = varPct + '%';
+  document.getElementById('bar-var').textContent = variance.toFixed(1);
+
+  const insight = pj < 0.1
+    ? `⚠️ p<sub>j</sub> = ${pj.toFixed(2)} is very small — x̂<sub>j</sub> = <strong>${xhat.toFixed(1)}</strong>, variance = <strong>${variance.toFixed(0)}</strong>. This arm is rarely played, so one observation causes a huge weight update. This is exactly the source of Exp3's high variance.`
+    : pj < 0.3
+    ? `p<sub>j</sub> = ${pj.toFixed(2)} — x̂<sub>j</sub> = <strong>${xhat.toFixed(2)}</strong>, variance = <strong>${variance.toFixed(1)}</strong>. Moderate inflation. The importance weight is noticeable but not extreme.`
+    : `p<sub>j</sub> = ${pj.toFixed(2)} — x̂<sub>j</sub> = <strong>${xhat.toFixed(2)}</strong>, variance = <strong>${variance.toFixed(1)}</strong>. This arm is played frequently — importance weight is close to the true reward, low variance.`;
+  document.getElementById('variance-insight').innerHTML = insight;
+}
+
+function updateVariancePlot() {
+  const T = +document.getElementById('T-var').value;
+  document.getElementById('T-var-out').textContent = T;
+  const labels = [], v32 = [], sqrtT = [], t34 = [];
+  for(let t = 1; t <= T; t += Math.max(1, Math.floor(T/100))) {
+    labels.push(t);
+    v32.push(+(Math.pow(t, 1.5) / 10).toFixed(1));
+    sqrtT.push(+(Math.sqrt(t) * 5).toFixed(1));
+    t34.push(+(Math.pow(t, 0.75) * 2).toFixed(1));
+  }
+  if(varianceChart) {
+    varianceChart.data.labels = labels;
+    varianceChart.data.datasets[0].data = v32;
+    varianceChart.data.datasets[1].data = sqrtT;
+    varianceChart.data.datasets[2].data = t34;
+    varianceChart.update();
+  } else {
+    varianceChart = new Chart(document.getElementById('varianceChart'), {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'T^1.5 (variance)', data: v32, borderColor: '#c0392b', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+        { label: '√T (expected regret)', data: sqrtT, borderColor: '#1a6b2e', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+        { label: 'T^0.75 (worst-case run)', data: t34, borderColor: '#185fa5', borderWidth: 2, borderDash: [5,3], pointRadius: 0, tension: 0.3 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { title: { display: true, text: 'round t', font: { size: 12 } }, ticks: { maxTicksLimit: 6 } },
+          y: { title: { display: true, text: 'magnitude (scaled)', font: { size: 12 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
+}
+
+// ─── SIMULATION HELPERS ─────────────────────────────────────────────────────
+function seededRand(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+
+function simulateExp3(K, T, gamma, rng) {
+  const bestArm = Math.floor(rng() * K);
+  const rewards = Array.from({length:K}, (_, k) =>
+    Array.from({length:T}, () => k===bestArm ? 0.6+rng()*0.4 : rng()*0.4));
+  const w = new Array(K).fill(1);
+  let G = 0; const regrets = [];
+  for(let t=0; t<T; t++) {
+    const W = w.reduce((a,b)=>a+b,0);
+    const p = w.map(wi => (1-gamma)*wi/W + gamma/K);
+    let r=rng(), cum=0, chosen=0;
+    for(let k=0;k<K;k++){cum+=p[k];if(r<cum){chosen=k;break;}}
+    G += rewards[chosen][t];
+    const xhat = new Array(K).fill(0);
+    xhat[chosen] = rewards[chosen][t]/p[chosen];
+    for(let k=0;k<K;k++) w[k] *= Math.exp(gamma*xhat[k]/K);
+    const best = Math.max(...rewards.map(r=>r.slice(0,t+1).reduce((a,b)=>a+b,0)));
+    regrets.push(+(best - G).toFixed(2));
+  }
+  return regrets;
+}
+
+function simulateExp3P(K, T, gamma, alpha, rng) {
+  const bestArm = Math.floor(rng() * K);
+  const rewards = Array.from({length:K}, (_,k) =>
+    Array.from({length:T}, () => k===bestArm ? 0.6+rng()*0.4 : rng()*0.4));
+  const sqrtKT = Math.sqrt(K*T);
+  const w = new Array(K).fill(Math.exp(alpha*gamma/(3)*Math.sqrt(T/K)));
+  const sigma = new Array(K).fill(sqrtKT);
+  let G=0; const regrets=[];
+  for(let t=0;t<T;t++) {
+    const W=w.reduce((a,b)=>a+b,0);
+    const p=w.map(wi=>(1-gamma)*wi/W+gamma/K);
+    let r=rng(),cum=0,chosen=0;
+    for(let k=0;k<K;k++){cum+=p[k];if(r<cum){chosen=k;break;}}
+    G+=rewards[chosen][t];
+    const xhat=new Array(K).fill(0);
+    xhat[chosen]=rewards[chosen][t]/p[chosen];
+    for(let k=0;k<K;k++){
+      sigma[k]+=1/(p[k]*sqrtKT);
+      w[k]*=Math.exp(gamma/(3*K)*(xhat[k]+alpha/(p[k]*sqrtKT)));
+    }
+    const best=Math.max(...rewards.map(r=>r.slice(0,t+1).reduce((a,b)=>a+b,0)));
+    regrets.push(+(best-G).toFixed(2));
+  }
+  return regrets;
+}
+
+// ─── PANEL 2: COMPARISON ─────────────────────────────────────────────────────
+function runComparison() {
+  const K = +document.getElementById('K-comp').value;
+  const T = +document.getElementById('T-comp').value;
+  document.getElementById('K-comp-out').textContent = K;
+  document.getElementById('T-comp-out').textContent = T;
+  const gamma = Math.min(1, Math.sqrt(K*Math.log(K)/((Math.E-1)*T)));
+  const alpha = 2*Math.sqrt(Math.log(K*T/0.05));
+  const labels = Array.from({length:T},(_,i)=>i+1);
+  const bound = labels.map(t => +(2.63*Math.sqrt(K*t*Math.log(K))).toFixed(2));
+  const datasets = [];
+  const nRuns = compMode==='both' ? 1 : 5;
+
+  if(compMode==='both' || compMode==='exp3only') {
+    for(let r=0;r<nRuns;r++){
+      const rng=seededRand(r*1234+7);
+      datasets.push({
+        label:'Exp3 run '+(r+1), data:simulateExp3(K,T,gamma,rng),
+        borderColor:`rgba(192,57,43,${nRuns===1?1:0.5+r*0.1})`,
+        borderWidth:nRuns===1?2:1.5, pointRadius:0, tension:0.2
+      });
+    }
+  }
+  if(compMode==='both' || compMode==='exp3ponly') {
+    for(let r=0;r<nRuns;r++){
+      const rng=seededRand(r*5678+3);
+      datasets.push({
+        label:'Exp3.P run '+(r+1), data:simulateExp3P(K,T,gamma,alpha,rng),
+        borderColor:`rgba(26,107,46,${nRuns===1?1:0.5+r*0.1})`,
+        borderWidth:nRuns===1?2:1.5, pointRadius:0, tension:0.2
+      });
+    }
+  }
+  datasets.push({
+    label:'O(√T) bound', data:bound,
+    borderColor:'#888', borderWidth:1.5, borderDash:[5,3], pointRadius:0, tension:0.2
+  });
+
+  if(compChart){compChart.data.labels=labels;compChart.data.datasets=datasets;compChart.update();}
+  else {
+    compChart=new Chart(document.getElementById('compChart'),{
+      type:'line', data:{labels,datasets},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{title:{display:true,text:'round t',font:{size:12}},ticks:{maxTicksLimit:8}},
+          y:{title:{display:true,text:'cumulative regret',font:{size:12}},beginAtZero:true}
+        },animation:{duration:200}}
+    });
+  }
+
+  // stats
+  const rng1=seededRand(999), rng2=seededRand(888);
+  const exp3Final=simulateExp3(K,T,gamma,rng1).slice(-1)[0];
+  const exp3pFinal=simulateExp3P(K,T,gamma,alpha,rng2).slice(-1)[0];
+  const boundFinal=(2.63*Math.sqrt(K*T*Math.log(K))).toFixed(1);
+  document.getElementById('comp-stats').innerHTML=`
+    <div class="stat-box exp3"><div>Exp3 final regret</div><div class="val">${exp3Final.toFixed(1)}</div></div>
+    <div class="stat-box exp3p"><div>Exp3.P final regret</div><div class="val">${exp3pFinal.toFixed(1)}</div></div>
+    <div class="stat-box"><div>O(√T) bound</div><div class="val">${boundFinal}</div></div>
+  `;
+}
+
+// ─── PANEL 3: HIGH PROBABILITY ───────────────────────────────────────────────
+function runProbDemo() {
+  const K=+document.getElementById('K-prob').value;
+  const T=+document.getElementById('T-prob').value;
+  const delta=document.getElementById('delta-prob').value/100;
+  const N=+document.getElementById('N-prob').value;
+  document.getElementById('K-prob-out').textContent=K;
+  document.getElementById('T-prob-out').textContent=T;
+  document.getElementById('delta-prob-out').textContent=delta.toFixed(2);
+  document.getElementById('N-prob-out').textContent=N;
+
+  const gamma=Math.min(1,Math.sqrt(K*Math.log(K)/((Math.E-1)*T)));
+  const alpha=2*Math.sqrt(Math.log(K*T/delta));
+  const hpBound=4*Math.sqrt(K*T*Math.log(K*T/delta))+4*Math.sqrt(5*K*T*Math.log(K)/3)+8*Math.log(K*T/delta);
+
+  const exp3Finals=[], exp3pFinals=[];
+  for(let r=0;r<N;r++){
+    exp3Finals.push(simulateExp3(K,T,gamma,seededRand(r*111+1)).slice(-1)[0]);
+    exp3pFinals.push(simulateExp3P(K,T,gamma,alpha,seededRand(r*222+2)).slice(-1)[0]);
+  }
+
+  const labels=Array.from({length:N},(_,i)=>'run '+(i+1));
+  const hpLine=Array(N).fill(+hpBound.toFixed(1));
+
+  if(probChart){
+    probChart.data.labels=labels;
+    probChart.data.datasets[0].data=exp3Finals;
+    probChart.data.datasets[1].data=exp3pFinals;
+    probChart.data.datasets[2].data=hpLine;
+    probChart.update();
+  } else {
+    probChart=new Chart(document.getElementById('probChart'),{
+      type:'scatter',
+      data:{labels, datasets:[
+        {label:'Exp3',data:exp3Finals.map((v,i)=>({x:i,y:v})),backgroundColor:'rgba(192,57,43,0.5)',pointRadius:4},
+        {label:'Exp3.P',data:exp3pFinals.map((v,i)=>({x:i,y:v})),backgroundColor:'rgba(26,107,46,0.6)',pointRadius:4},
+        {label:'H-P bound',data:hpLine.map((v,i)=>({x:i,y:v})),type:'line',borderColor:'#888',borderWidth:1.5,borderDash:[5,3],pointRadius:0},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{title:{display:true,text:'run index',font:{size:12}},ticks:{maxTicksLimit:6}},
+          y:{title:{display:true,text:'final regret',font:{size:12}},beginAtZero:true}
+        },animation:{duration:200}}
+    });
+  }
+
+  const exp3Violations=exp3Finals.filter(v=>v>hpBound).length;
+  const exp3pViolations=exp3pFinals.filter(v=>v>hpBound).length;
+  const exp3Rate=(exp3Violations/N*100).toFixed(0);
+  const exp3pRate=(exp3pViolations/N*100).toFixed(0);
+
+  document.getElementById('prob-bars').innerHTML=`
+    <div class="bar-label">Exp3 — bound violation rate: ${exp3Rate}% (${exp3Violations}/${N} runs exceed bound)</div>
+    <div class="bar-track"><div class="bar-fill" style="background:#c0392b; width:${Math.min(+exp3Rate,100)}%">${exp3Rate}%</div></div>
+    <div class="bar-label">Exp3.P — bound violation rate: ${exp3pRate}% (${exp3pViolations}/${N} runs exceed bound)</div>
+    <div class="bar-track"><div class="bar-fill" style="background:#1a6b2e; width:${Math.max(+exp3pRate,2)}%">${exp3pRate}%</div></div>
+    <div class="bar-label">Theoretical guarantee: at most δ×100 = ${(delta*100).toFixed(0)}% violations</div>
+    <div class="bar-track"><div class="bar-fill" style="background:#185fa5; width:${delta*100}%">${(delta*100).toFixed(0)}%</div></div>
+  `;
+
+  document.getElementById('prob-insight').innerHTML=
+    `Exp3 violates the bound in <strong>${exp3Rate}%</strong> of runs. Exp3.P violates in <strong>${exp3pRate}%</strong> — ` +
+    (exp3pViolations <= delta*N*1.5
+      ? `✅ consistent with the δ = ${(delta*100).toFixed(0)}% guarantee of Theorem 6.3.`
+      : `close to the δ = ${(delta*100).toFixed(0)}% theoretical guarantee.`);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+updateVarianceDemo();
+updateVariancePlot();
+</script>
+</body>
+</html>
